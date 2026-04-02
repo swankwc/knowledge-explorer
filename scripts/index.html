@@ -7,24 +7,84 @@
   </head>
   <body>
     <script>
-      async function buildPlaceholderResult(data) {
-        const query = (data && data.query) || "";
+      function pickMode(data) {
+        const allowed = new Set(["overview", "gallery", "timeline", "audio", "compare", "study"]);
+        return allowed.has(data.mode) ? data.mode : "overview";
+      }
+
+      function normalizeArray(value) {
+        return Array.isArray(value)
+          ? value.map((item) => String(item || "").trim()).filter(Boolean)
+          : [];
+      }
+
+      function buildSummary(data) {
+        const mode = pickMode(data);
+        const query = String(data.query || "").trim();
+        const related = normalizeArray(data.related_queries);
+
+        const summaries = {
+          overview: "Overview requested for " + query + ".",
+          gallery: "Visual exploration requested for " + query + ".",
+          timeline: "Timeline view requested for " + query + ".",
+          audio: "Audio-oriented exploration requested for " + query + ".",
+          compare: related.length
+            ? "Comparison requested for " + [query].concat(related).join(" vs. ") + "."
+            : "Comparison mode requested for " + query + ".",
+          study: "Study-card view requested for " + query + "."
+        };
+
+        return summaries[mode] || summaries.overview;
+      }
+
+      function buildSections(data) {
+        const query = String(data.query || "").trim();
+        const related = normalizeArray(data.related_queries);
+        const mode = pickMode(data);
+
         return {
-          result: {
-            status: "scaffold",
-            message: query
-              ? `Knowledge Explorer scaffold received query: ${query}`
-              : "Knowledge Explorer scaffold is wired up.",
-            webview: {
-              url: "./assets/webview.html?state=scaffold"
-            }
+          hero: {
+            title: query || "Knowledge Explorer",
+            subtitle: buildSummary(data)
+          },
+          facts: [
+            { label: "Mode", value: mode },
+            { label: "Language", value: String(data.lang || "en") },
+            { label: "Images", value: data.include_images ? "requested" : "off" },
+            { label: "Audio", value: data.include_audio ? "requested" : "off" }
+          ],
+          related: related,
+          placeholders: {
+            summary: "Live data retrieval will be added next.",
+            images: data.include_images ? ["Image support scaffolded"] : [],
+            audio: data.include_audio ? ["Audio support scaffolded"] : []
           }
         };
       }
 
       window.ai_edge_gallery_get_result = async function (data) {
         try {
-          return await buildPlaceholderResult(data || {});
+          const payload = data || {};
+          const query = String(payload.query || "").trim();
+
+          if (!query) {
+            return { error: "Missing required field: query" };
+          }
+
+          const sections = buildSections(payload);
+          const state = encodeURIComponent(JSON.stringify(sections));
+
+          return {
+            result: {
+              status: "scaffold-v1",
+              mode: pickMode(payload),
+              message: buildSummary(payload),
+              data: sections,
+              webview: {
+                url: "./assets/webview.html?state=" + state
+              }
+            }
+          };
         } catch (error) {
           return {
             error: error instanceof Error ? error.message : String(error)
