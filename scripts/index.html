@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Knowledge Explorer Runner</title>
+  </head>
+  <body>
+    <script>
+      async function buildPlaceholderResult(data) {
+        const query = (data && data.query) || "";
+        return {
+          result: {
+            status: "scaffold",
+            message: query
+              ? `Knowledge Explorer scaffold received query: ${query}`
+              : "Knowledge Explorer scaffold is wired up.",
+            webview: {
+              url: "./assets/webview.html?state=scaffold"
+            }
+          }
+        };
+      }
+
+      window.ai_edge_gallery_get_result = async function (data) {
+        try {
+          return await buildPlaceholderResult(data || {});
+        } catch (error) {
+          return {
+            error: error instanceof Error ? error.message : String(error)
+          };
+        }
+      };
+    </script>
+  </body>
+</html>
