@@ -11,32 +11,143 @@
       }
       body {
         margin: 0;
-        padding: 24px;
+        padding: 20px;
+        background: Canvas;
+        color: CanvasText;
+      }
+      .wrap {
+        max-width: 900px;
+        margin: 0 auto;
+        display: grid;
+        gap: 16px;
       }
       .card {
-        max-width: 720px;
-        margin: 0 auto;
-        padding: 20px;
         border: 1px solid rgba(127,127,127,.35);
         border-radius: 16px;
+        padding: 16px;
+        background: rgba(127,127,127,.06);
       }
-      h1 { margin-top: 0; }
-      code {
-        padding: 2px 6px;
-        border-radius: 6px;
-        background: rgba(127,127,127,.12);
+      h1, h2, h3, p { margin-top: 0; }
+      .facts {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+        gap: 10px;
+      }
+      .fact {
+        padding: 12px;
+        border-radius: 12px;
+        background: rgba(127,127,127,.08);
+      }
+      .label {
+        font-size: .82rem;
+        opacity: .75;
+        margin-bottom: 4px;
+      }
+      ul {
+        margin: 0;
+        padding-left: 20px;
+      }
+      .muted {
+        opacity: .8;
       }
     </style>
   </head>
   <body>
-    <div class="card">
-      <h1>Knowledge Explorer</h1>
-      <p>This is the initial webview scaffold for the skill.</p>
-      <p>Current state: <code id="state">scaffold</code></p>
+    <div class="wrap">
+      <section class="card">
+        <h1 id="title">Knowledge Explorer</h1>
+        <p id="subtitle" class="muted">Scaffold</p>
+      </section>
+
+      <section class="card">
+        <h2>Facts</h2>
+        <div id="facts" class="facts"></div>
+      </section>
+
+      <section class="card">
+        <h2>Summary</h2>
+        <p id="summary">Waiting for data.</p>
+      </section>
+
+      <section class="card">
+        <h2>Related Topics</h2>
+        <ul id="related"></ul>
+      </section>
+
+      <section class="card">
+        <h2>Media Placeholders</h2>
+        <div id="media"></div>
+      </section>
     </div>
+
     <script>
-      const params = new URLSearchParams(window.location.search);
-      document.getElementById('state').textContent = params.get('state') || 'scaffold';
+      function parseState() {
+        const params = new URLSearchParams(window.location.search);
+        const raw = params.get('state');
+        if (!raw) return null;
+        try {
+          return JSON.parse(raw);
+        } catch {
+          return null;
+        }
+      }
+
+      function renderFacts(facts) {
+        const container = document.getElementById('facts');
+        container.innerHTML = '';
+        facts.forEach(function (fact) {
+          const div = document.createElement('div');
+          div.className = 'fact';
+          div.innerHTML = '<div class="label">' + fact.label + '</div><div>' + fact.value + '</div>';
+          container.appendChild(div);
+        });
+      }
+
+      function renderList(id, items, emptyText) {
+        const el = document.getElementById(id);
+        el.innerHTML = '';
+        if (!items || !items.length) {
+          const li = document.createElement('li');
+          li.textContent = emptyText;
+          el.appendChild(li);
+          return;
+        }
+        items.forEach(function (item) {
+          const li = document.createElement('li');
+          li.textContent = item;
+          el.appendChild(li);
+        });
+      }
+
+      function renderMedia(placeholders) {
+        const media = document.getElementById('media');
+        media.innerHTML = '';
+        const rows = [];
+        if (placeholders.images && placeholders.images.length) {
+          rows.push('Images: ' + placeholders.images.join(', '));
+        }
+        if (placeholders.audio && placeholders.audio.length) {
+          rows.push('Audio: ' + placeholders.audio.join(', '));
+        }
+        if (!rows.length) {
+          rows.push('No media requested yet.');
+        }
+        rows.forEach(function (text) {
+          const p = document.createElement('p');
+          p.textContent = text;
+          media.appendChild(p);
+        });
+      }
+
+      const state = parseState();
+      if (state) {
+        document.getElementById('title').textContent = state.hero && state.hero.title ? state.hero.title : 'Knowledge Explorer';
+        document.getElementById('subtitle').textContent = state.hero && state.hero.subtitle ? state.hero.subtitle : 'Scaffold';
+        document.getElementById('summary').textContent = state.placeholders && state.placeholders.summary ? state.placeholders.summary : 'No summary available.';
+        renderFacts(state.facts || []);
+        renderList('related', state.related || [], 'No related topics provided.');
+        renderMedia(state.placeholders || {});
+      }
     </script>
   </body>
 </html>
