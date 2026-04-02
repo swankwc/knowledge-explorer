@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Knowledge Explorer</title>
+    <style>
+      :root {
+        color-scheme: light dark;
+        font-family: system-ui, sans-serif;
+      }
+      body {
+        margin: 0;
+        padding: 24px;
+      }
+      .card {
+        max-width: 720px;
+        margin: 0 auto;
+        padding: 20px;
+        border: 1px solid rgba(127,127,127,.35);
+        border-radius: 16px;
+      }
+      h1 { margin-top: 0; }
+      code {
+        padding: 2px 6px;
+        border-radius: 6px;
+        background: rgba(127,127,127,.12);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <h1>Knowledge Explorer</h1>
+      <p>This is the initial webview scaffold for the skill.</p>
+      <p>Current state: <code id="state">scaffold</code></p>
+    </div>
+    <script>
+      const params = new URLSearchParams(window.location.search);
+      document.getElementById('state').textContent = params.get('state') || 'scaffold';
+    </script>
+  </body>
+</html>
