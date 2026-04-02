@@ -8,7 +8,7 @@ description: Explore a topic with Wikipedia summaries, Wikimedia images, and str
 ## Instructions
 Call the run_js tool using scripts/index.html and a JSON string for data with these fields.
 
-- query: required. Extract the main topic, entity, place, event, work, or concept.
+- query: required. Extract the main topic, entity, place, event, work, or concept. 
 - lang: required. Use the user's 2-letter language code.
 - mode: required. One of overview, gallery, timeline, audio, compare, or study.
 - related_queries: optional array used for comparison or related topics.
