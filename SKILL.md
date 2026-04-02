@@ -1,6 +1,6 @@
 ---
 name: knowledge-explorer
-description: Explore a topic with rich media and structured knowledge cards.
+description: Explore a topic with Wikipedia summaries, Wikimedia images, and structured knowledge cards.
 ---
 
 # Knowledge Explorer
@@ -18,6 +18,8 @@ Call the run_js tool using scripts/index.html and a JSON string for data with th
 ## Behavior
 - Prefer broad canonical topic names.
 - Preserve specific years for recurring events when the user includes them.
+- Use gallery mode when the user asks for images or visual exploration.
+- Use compare mode only when the user clearly wants multiple topics contrasted.
 - Keep the final response grounded in the tool result.
 - If the tool returns a webview, briefly introduce what the user is seeing.
 - If the exact answer is not available, say so plainly and provide the closest useful result.
