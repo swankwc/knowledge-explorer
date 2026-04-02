@@ -16,7 +16,7 @@
         color: CanvasText;
       }
       .wrap {
-        max-width: 900px;
+        max-width: 980px;
         margin: 0 auto;
         display: grid;
         gap: 16px;
@@ -27,7 +27,13 @@
         padding: 16px;
         background: rgba(127,127,127,.06);
       }
-      h1, h2, h3, p { margin-top: 0; }
+      h1, h2, h3, p {
+        margin-top: 0;
+      }
+      .hero {
+        display: grid;
+        gap: 16px;
+      }
       .facts {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
@@ -43,20 +49,56 @@
         opacity: .75;
         margin-bottom: 4px;
       }
+      .muted {
+        opacity: .8;
+      }
+      .thumb {
+        max-width: 220px;
+        width: 100%;
+        border-radius: 12px;
+        display: block;
+      }
+      .gallery {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 12px;
+      }
+      .gallery-item img {
+        width: 100%;
+        aspect-ratio: 1 / 1;
+        object-fit: cover;
+        border-radius: 12px;
+        display: block;
+      }
       ul {
         margin: 0;
         padding-left: 20px;
       }
-      .muted {
-        opacity: .8;
+      a {
+        color: inherit;
+      }
+      .compare-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+        gap: 12px;
+      }
+      .compare-card {
+        padding: 12px;
+        border-radius: 12px;
+        background: rgba(127,127,127,.08);
       }
     </style>
   </head>
   <body>
     <div class="wrap">
-      <section class="card">
-        <h1 id="title">Knowledge Explorer</h1>
-        <p id="subtitle" class="muted">Scaffold</p>
+      <section class="card hero">
+        <div>
+          <h1 id="title">Knowledge Explorer</h1>
+          <p id="description" class="muted"></p>
+          <p id="summary">Waiting for data.</p>
+          <p><a id="article-link" href="#" target="_blank" rel="noopener noreferrer">Open article</a></p>
+        </div>
+        <div id="thumb-wrap"></div>
       </section>
 
       <section class="card">
@@ -65,25 +107,25 @@
       </section>
 
       <section class="card">
-        <h2>Summary</h2>
-        <p id="summary">Waiting for data.</p>
+        <h2>Timeline / Key Sentences</h2>
+        <ul id="timeline"></ul>
       </section>
 
       <section class="card">
-        <h2>Related Topics</h2>
-        <ul id="related"></ul>
+        <h2>Image Gallery</h2>
+        <div id="gallery" class="gallery"></div>
       </section>
 
       <section class="card">
-        <h2>Media Placeholders</h2>
-        <div id="media"></div>
+        <h2>Compare</h2>
+        <div id="compare" class="compare-grid"></div>
       </section>
     </div>
 
     <script>
       function parseState() {
         const params = new URLSearchParams(window.location.search);
-        const raw = params.get('state');
+        const raw = params.get("state");
         if (!raw) return null;
         try {
           return JSON.parse(raw);
@@ -93,60 +135,108 @@
       }
 
       function renderFacts(facts) {
-        const container = document.getElementById('facts');
-        container.innerHTML = '';
-        facts.forEach(function (fact) {
-          const div = document.createElement('div');
-          div.className = 'fact';
-          div.innerHTML = '<div class="label">' + fact.label + '</div><div>' + fact.value + '</div>';
+        const container = document.getElementById("facts");
+        container.innerHTML = "";
+        (facts || []).forEach(function (fact) {
+          const div = document.createElement("div");
+          div.className = "fact";
+          div.innerHTML =
+            '<div class="label">' + fact.label + "</div><div>" + fact.value + "</div>";
           container.appendChild(div);
         });
       }
 
       function renderList(id, items, emptyText) {
         const el = document.getElementById(id);
-        el.innerHTML = '';
+        el.innerHTML = "";
         if (!items || !items.length) {
-          const li = document.createElement('li');
+          const li = document.createElement("li");
           li.textContent = emptyText;
           el.appendChild(li);
           return;
         }
         items.forEach(function (item) {
-          const li = document.createElement('li');
+          const li = document.createElement("li");
           li.textContent = item;
           el.appendChild(li);
         });
       }
 
-      function renderMedia(placeholders) {
-        const media = document.getElementById('media');
-        media.innerHTML = '';
-        const rows = [];
-        if (placeholders.images && placeholders.images.length) {
-          rows.push('Images: ' + placeholders.images.join(', '));
+      function renderThumbnail(url, title) {
+        const wrap = document.getElementById("thumb-wrap");
+        wrap.innerHTML = "";
+        if (!url) return;
+        const img = document.createElement("img");
+        img.src = url;
+        img.alt = title || "Thumbnail";
+        img.className = "thumb";
+        wrap.appendChild(img);
+      }
+
+      function renderGallery(images) {
+        const gallery = document.getElementById("gallery");
+        gallery.innerHTML = "";
+
+        if (!images || !images.length) {
+          const p = document.createElement("p");
+          p.textContent = "No gallery images available.";
+          gallery.appendChild(p);
+          return;
         }
-        if (placeholders.audio && placeholders.audio.length) {
-          rows.push('Audio: ' + placeholders.audio.join(', '));
+
+        images.forEach(function (item) {
+          const card = document.createElement("div");
+          card.className = "gallery-item";
+          const img = document.createElement("img");
+          img.src = item.url;
+          img.alt = item.title || "Image";
+          card.appendChild(img);
+          gallery.appendChild(card);
+        });
+      }
+
+      function renderCompare(items) {
+        const compare = document.getElementById("compare");
+        compare.innerHTML = "";
+
+        if (!items || !items.length) {
+          const p = document.createElement("p");
+          p.textContent = "No comparison topics requested.";
+          compare.appendChild(p);
+          return;
         }
-        if (!rows.length) {
-          rows.push('No media requested yet.');
-        }
-        rows.forEach(function (text) {
-          const p = document.createElement('p');
-          p.textContent = text;
-          media.appendChild(p);
+
+        items.forEach(function (item) {
+          const card = document.createElement("div");
+          card.className = "compare-card";
+          card.innerHTML =
+            "<h3>" + (item.title || item.query || "Topic") + "</h3>" +
+            "<p class='muted'>" + (item.description || "No description") + "</p>" +
+            "<p>" + (item.summary || "No summary available.") + "</p>";
+          compare.appendChild(card);
         });
       }
 
       const state = parseState();
-      if (state) {
-        document.getElementById('title').textContent = state.hero && state.hero.title ? state.hero.title : 'Knowledge Explorer';
-        document.getElementById('subtitle').textContent = state.hero && state.hero.subtitle ? state.hero.subtitle : 'Scaffold';
-        document.getElementById('summary').textContent = state.placeholders && state.placeholders.summary ? state.placeholders.summary : 'No summary available.';
-        renderFacts(state.facts || []);
-        renderList('related', state.related || [], 'No related topics provided.');
-        renderMedia(state.placeholders || {});
+      if (state && state.primary) {
+        const primary = state.primary;
+
+        document.getElementById("title").textContent = primary.title || "Knowledge Explorer";
+        document.getElementById("description").textContent = primary.description || "";
+        document.getElementById("summary").textContent = primary.summary || "No summary available.";
+
+        const link = document.getElementById("article-link");
+        if (primary.articleUrl) {
+          link.href = primary.articleUrl;
+        } else {
+          link.style.display = "none";
+        }
+
+        renderThumbnail(primary.thumbnailUrl, primary.title);
+        renderFacts(primary.facts || []);
+        renderList("timeline", primary.timeline || [], "No timeline items available.");
+        renderGallery(primary.images || []);
+        renderCompare(state.relatedResults || []);
       }
     </script>
   </body>
