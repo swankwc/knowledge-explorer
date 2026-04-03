@@ -1,46 +1,79 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Knowledge Explorer Runner</title>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Knowledge Explorer</title>
   </head>
   <body>
     <script>
-      function pickMode(data) {
-        const allowed = new Set(["overview", "gallery", "timeline", "audio", "compare", "study"]);
-        return allowed.has(data.mode) ? data.mode : "overview";
-      }
+      async function fetchWikiSummary(topic, lang) {
+        const baseUrl = `https://${lang}.wikipedia.org/w/api.php`;
 
-      function normalizeArray(value) {
-        return Array.isArray(value)
-          ? value.map((item) => String(item || "").trim()).filter(Boolean)
-          : [];
-      }
-
-      function safeText(value) {
-        return String(value || "").trim();
-      }
-
-      async function fetchJson(url) {
-        const response = await fetch(url, {
-          headers: { accept: "application/json" }
+        const searchParams = new URLSearchParams({
+          action: "query",
+          format: "json",
+          generator: "search",
+          gsrsearch: topic,
+          gsrlimit: "1",
+          prop: "extracts",
+          explaintext: "1",
+          exintro: "1",
+          origin: "*"
         });
 
-        if (!response.ok) {
-          throw new Error("Request failed: " + response.status + " " + response.statusText);
+        const searchRes = await fetch(`${baseUrl}?${searchParams.toString()}`);
+        if (!searchRes.ok) {
+          throw new Error(`HTTP error! status: ${searchRes.status}`);
         }
 
-        return response.json();
+        const searchData = await searchRes.json();
+        if (!searchData.query || !searchData.query.pages) {
+          return {
+            error: `No Wikipedia articles found matching '${topic}' in language '${lang}'.`
+          };
+        }
+
+        const pages = searchData.query.pages;
+        const firstPageKey = Object.keys(pages)[0];
+        const page = pages[firstPageKey];
+        const title = page?.title || topic;
+        const extract = page?.extract || "";
+
+        if (!extract.trim()) {
+          return {
+            error: `Found page '${title}' but no summary was available.`
+          };
+        }
+
+        return {
+          title,
+          result: extract
+        };
       }
 
-      async function searchWikipedia(query, lang) {
-        const url =
-          "https://" + encodeURIComponent(lang) + ".wikipedia.org/w/api.php" +
-          "?origin=*" +
-          "&action=query" +
-          "&list=search" +
-          "&srsearch=" + encodeURIComponent(query) +
-          "&format=json";
+      window["ai_edge_gallery_get_result"] = async (data) => {
+        try {
+          const jsonData = JSON.parse(data);
 
-        const data =
+          const topic =
+            (jsonData.query || jsonData.topic || "").toString().trim();
+          const lang =
+            (jsonData.lang || "en").toString().trim().toLowerCase();
+
+          if (!topic) {
+            return JSON.stringify({ error: "No topic provided to search." });
+          }
+
+          const wikiResponse = await fetchWikiSummary(topic, lang);
+          return JSON.stringify(wikiResponse);
+        } catch (e) {
+          console.error(e);
+          return JSON.stringify({
+            error: `Failed to query Wikipedia: ${e.message}`
+          });
+        }
+      };
+    </script>
+  </body>
+</html>
