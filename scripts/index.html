@@ -8,100 +8,72 @@
   <body>
     <script>
       async function fetchJson(url) {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const res = await fetch(url, {
+          headers: { accept: "application/json" }
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
         return res.json();
       }
 
-      async function searchWikipedia(topic, lang) {
-        const baseUrl = `https://${lang}.wikipedia.org/w/api.php`;
-        const params = new URLSearchParams({
-          action: "query",
-          format: "json",
-          generator: "search",
-          gsrsearch: topic,
-          gsrlimit: "1",
-          prop: "extracts",
-          explaintext: "1",
-          exintro: "1",
-          origin: "*"
-        });
+      async function fetchWikiSummary(topic, lang) {
+        const url =
+          `https://${lang}.wikipedia.org/api/rest_v1/page/summary/` +
+          encodeURIComponent(topic);
 
-        const data = await fetchJson(`${baseUrl}?${params.toString()}`);
-        if (!data.query || !data.query.pages) {
-          return { error: `No Wikipedia articles found for '${topic}'.` };
+        try {
+          const data = await fetchJson(url);
+          if (data && data.title && (data.extract || data.description)) {
+            return data;
+          }
+        } catch (_) {
         }
 
-        const pages = data.query.pages;
-        const firstPageKey = Object.keys(pages)[0];
-        const page = pages[firstPageKey];
-
-        return {
-          title: page?.title || topic,
-          extract: page?.extract || ""
-        };
-      }
-
-      async function fetchOneImageUrl(title, lang) {
-        const wikiUrl =
+        const searchUrl =
           `https://${lang}.wikipedia.org/w/api.php` +
           `?origin=*` +
           `&action=query` +
-          `&prop=images` +
-          `&titles=${encodeURIComponent(title)}` +
-          `&imlimit=12` +
+          `&list=search` +
+          `&srsearch=${encodeURIComponent(topic)}` +
           `&format=json`;
 
-        const data = await fetchJson(wikiUrl);
-        const pages = data?.query?.pages || {};
-        const firstPage = Object.values(pages)[0];
-        const images = Array.isArray(firstPage?.images) ? firstPage.images : [];
+        const search = await fetchJson(searchUrl);
+        const first = search?.query?.search?.[0];
+        if (!first?.title) {
+          throw new Error(`No Wikipedia article found for "${topic}"`);
+        }
 
-        const fileTitles = images
-          .map(x => x?.title || "")
-          .filter(name => {
-            const lower = name.toLowerCase();
-            return (
-              lower.endsWith(".jpg") ||
-              lower.endsWith(".jpeg") ||
-              lower.endsWith(".png") ||
-              lower.endsWith(".webp")
-            );
-          });
+        const fallbackUrl =
+          `https://${lang}.wikipedia.org/api/rest_v1/page/summary/` +
+          encodeURIComponent(first.title);
 
-        if (!fileTitles.length) return null;
-
-        const commonsUrl =
-          `https://commons.wikimedia.org/w/api.php` +
-          `?origin=*` +
-          `&action=query` +
-          `&titles=${fileTitles.map(encodeURIComponent).join("|")}` +
-          `&prop=imageinfo` +
-          `&iiprop=url` +
-          `&format=json`;
-
-        const info = await fetchJson(commonsUrl);
-        const infoPages = info?.query?.pages || {};
-        const firstWithUrl = Object.values(infoPages).find(
-          p => p?.imageinfo && p.imageinfo[0]?.url
-        );
-
-        return firstWithUrl?.imageinfo?.[0]?.url || null;
+        return fetchJson(fallbackUrl);
       }
 
       async function imageUrlToBase64(url) {
         const res = await fetch(url);
-        if (!res.ok) throw new Error(`Failed image fetch: ${res.status}`);
+        if (!res.ok) throw new Error(`Image fetch failed: HTTP ${res.status}`);
+
         const blob = await res.blob();
+        if (!blob.type.startsWith("image/")) {
+          throw new Error(`Fetched file is not an image: ${blob.type || "unknown type"}`);
+        }
 
         return await new Promise((resolve, reject) => {
           const reader = new FileReader();
           reader.onloadend = () => {
-            const dataUrl = reader.result;
-            const base64 = String(dataUrl).split(",")[1];
-            resolve(base64);
+            try {
+              const dataUrl = String(reader.result || "");
+              const commaIndex = dataUrl.indexOf(",");
+              if (commaIndex === -1) {
+                reject(new Error("Invalid data URL generated from image blob"));
+                return;
+              }
+              resolve(dataUrl.slice(commaIndex + 1));
+            } catch (err) {
+              reject(err);
+            }
           };
-          reader.onerror = reject;
+          reader.onerror = () => reject(new Error("Failed converting image to base64"));
           reader.readAsDataURL(blob);
         });
       }
@@ -117,25 +89,34 @@
             return JSON.stringify({ error: "No topic provided to search." });
           }
 
-          const wiki = await searchWikipedia(topic, lang);
-          if (wiki.error) {
-            return JSON.stringify({ error: wiki.error });
-          }
+          const summary = await fetchWikiSummary(topic, lang);
+
+          const title = String(summary?.title || topic).trim();
+          const extract = String(summary?.extract || "").trim();
+          const description = String(summary?.description || "").trim();
+          const thumb =
+            summary?.thumbnail?.source ||
+            summary?.originalimage?.source ||
+            "";
+
+          let resultText = extract || description || `No summary available for ${title}.`;
 
           const response = {
-            title: wiki.title,
-            result: wiki.extract || `No summary available for ${wiki.title}.`
+            title,
+            result: resultText
           };
 
           if (includeImages) {
-            try {
-              const imageUrl = await fetchOneImageUrl(wiki.title, lang);
-              if (imageUrl) {
-                const base64 = await imageUrlToBase64(imageUrl);
+            if (!thumb) {
+              response.result += `\n\n[Image status: no thumbnail available from Wikipedia summary]`;
+            } else {
+              try {
+                const base64 = await imageUrlToBase64(thumb);
                 response.image = { base64 };
+                response.result += `\n\n[Image status: included]`;
+              } catch (imageError) {
+                response.result += `\n\n[Image status: failed - ${imageError.message}]`;
               }
-            } catch (imageError) {
-              console.warn("Image fetch failed:", imageError);
             }
           }
 
