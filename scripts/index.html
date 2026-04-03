@@ -7,101 +7,71 @@
   </head>
   <body>
     <script>
-      async function fetchJson(url) {
-        const res = await fetch(url, { headers: { accept: "application/json" } });
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return res.json();
-      }
+      async function fetchWikiSummary(topic, lang) {
+        const baseUrl = `https://${lang}.wikipedia.org/w/api.php`;
 
-      async function fetchSummary(topic, lang) {
-        const searchUrl =
-          `https://${lang}.wikipedia.org/w/api.php` +
-          `?origin=*` +
-          `&action=query` +
-          `&list=search` +
-          `&srsearch=${encodeURIComponent(topic)}` +
-          `&format=json`;
+        const searchParams = new URLSearchParams({
+          action: "query",
+          format: "json",
+          generator: "search",
+          gsrsearch: topic,
+          gsrlimit: "1",
+          prop: "extracts",
+          explaintext: "1",
+          exintro: "1",
+          origin: "*"
+        });
 
-        const search = await fetchJson(searchUrl);
-        const first = search?.query?.search?.[0];
-        if (!first?.title) {
-          throw new Error(`No Wikipedia article found for "${topic}"`);
+        const searchRes = await fetch(`${baseUrl}?${searchParams.toString()}`);
+        if (!searchRes.ok) {
+          throw new Error(`HTTP error! status: ${searchRes.status}`);
         }
 
-        const summaryUrl =
-          `https://${lang}.wikipedia.org/api/rest_v1/page/summary/` +
-          encodeURIComponent(first.title);
-
-        return fetchJson(summaryUrl);
-      }
-
-      async function imageUrlToBase64(url) {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error(`Image fetch failed: HTTP ${res.status}`);
-
-        const blob = await res.blob();
-        return await new Promise((resolve, reject) => {
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const dataUrl = String(reader.result || "");
-            const comma = dataUrl.indexOf(",");
-            if (comma === -1) {
-              reject(new Error("Bad image data"));
-              return;
-            }
-            resolve(dataUrl.slice(comma + 1));
+        const searchData = await searchRes.json();
+        if (!searchData.query || !searchData.query.pages) {
+          return {
+            error: `No Wikipedia articles found matching '${topic}' in language '${lang}'.`
           };
-          reader.onerror = () => reject(new Error("Base64 conversion failed"));
-          reader.readAsDataURL(blob);
-        });
+        }
+
+        const pages = searchData.query.pages;
+        const firstPageKey = Object.keys(pages)[0];
+        const page = pages[firstPageKey];
+        const title = page?.title || topic;
+        const extract = page?.extract || "";
+
+        if (!extract.trim()) {
+          return {
+            error: `Found page '${title}' but no summary was available.`
+          };
+        }
+
+        return {
+          title,
+          result: extract
+        };
       }
 
       window["ai_edge_gallery_get_result"] = async (data) => {
         try {
-          const input = JSON.parse(data);
-          const query = String(input.query || "").trim();
-          const lang = String(input.lang || "en").trim().toLowerCase();
-          const includeImages = Boolean(input.include_images);
+          const jsonData = JSON.parse(data);
 
-          if (!query) {
-            return JSON.stringify({ error: "No topic provided." });
+          const topic =
+            (jsonData.query || jsonData.topic || "").toString().trim();
+          const lang =
+            (jsonData.lang || "en").toString().trim().toLowerCase();
+
+          if (!topic) {
+            return JSON.stringify({ error: "No topic provided to search." });
           }
 
-          const summary = await fetchSummary(query, lang);
-
-          const title = String(summary?.title || query).trim();
-          let result = String(summary?.extract || summary?.description || "").trim();
-
-          if (result.length > 700) {
-            result = result.slice(0, 700) + "...";
-          }
-
-          const response = {
-            title,
-            result: result || `No summary available for ${title}.`
-          };
-
-          if (includeImages) {
-            const imageUrl =
-              summary?.thumbnail?.source ||
-              summary?.originalimage?.source ||
-              "";
-
-            if (imageUrl) {
-              try {
-                const base64 = await imageUrlToBase64(imageUrl);
-                response.image = { base64 };
-              } catch (e) {
-                response.result += ` [Image failed: ${e.message}]`;
-              }
-            } else {
-              response.result += ` [No image available]`;
-            }
-          }
-
-          return JSON.stringify(response);
+          const wikiResponse = await fetchWikiSummary(topic, lang);
+          return JSON.stringify(wikiResponse);
         } catch (e) {
-          return JSON.stringify({ error: `Failed: ${e.message}` });
+          console.error(e);
+          return JSON.stringify({
+            error: `Failed to query Wikipedia: ${e.message}`
+          });
         }
       };
     </script>
