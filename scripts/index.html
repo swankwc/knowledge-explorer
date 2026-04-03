@@ -8,26 +8,12 @@
   <body>
     <script>
       async function fetchJson(url) {
-        const res = await fetch(url, {
-          headers: { accept: "application/json" }
-        });
-        if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+        const res = await fetch(url, { headers: { accept: "application/json" } });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
         return res.json();
       }
 
-      async function fetchWikiSummary(topic, lang) {
-        const url =
-          `https://${lang}.wikipedia.org/api/rest_v1/page/summary/` +
-          encodeURIComponent(topic);
-
-        try {
-          const data = await fetchJson(url);
-          if (data && data.title && (data.extract || data.description)) {
-            return data;
-          }
-        } catch (_) {
-        }
-
+      async function fetchSummary(topic, lang) {
         const searchUrl =
           `https://${lang}.wikipedia.org/w/api.php` +
           `?origin=*` +
@@ -42,11 +28,11 @@
           throw new Error(`No Wikipedia article found for "${topic}"`);
         }
 
-        const fallbackUrl =
+        const summaryUrl =
           `https://${lang}.wikipedia.org/api/rest_v1/page/summary/` +
           encodeURIComponent(first.title);
 
-        return fetchJson(fallbackUrl);
+        return fetchJson(summaryUrl);
       }
 
       async function imageUrlToBase64(url) {
@@ -54,78 +40,68 @@
         if (!res.ok) throw new Error(`Image fetch failed: HTTP ${res.status}`);
 
         const blob = await res.blob();
-        if (!blob.type.startsWith("image/")) {
-          throw new Error(`Fetched file is not an image: ${blob.type || "unknown type"}`);
-        }
-
         return await new Promise((resolve, reject) => {
           const reader = new FileReader();
           reader.onloadend = () => {
-            try {
-              const dataUrl = String(reader.result || "");
-              const commaIndex = dataUrl.indexOf(",");
-              if (commaIndex === -1) {
-                reject(new Error("Invalid data URL generated from image blob"));
-                return;
-              }
-              resolve(dataUrl.slice(commaIndex + 1));
-            } catch (err) {
-              reject(err);
+            const dataUrl = String(reader.result || "");
+            const comma = dataUrl.indexOf(",");
+            if (comma === -1) {
+              reject(new Error("Bad image data"));
+              return;
             }
+            resolve(dataUrl.slice(comma + 1));
           };
-          reader.onerror = () => reject(new Error("Failed converting image to base64"));
+          reader.onerror = () => reject(new Error("Base64 conversion failed"));
           reader.readAsDataURL(blob);
         });
       }
 
       window["ai_edge_gallery_get_result"] = async (data) => {
         try {
-          const jsonData = JSON.parse(data);
-          const topic = String(jsonData.query || jsonData.topic || "").trim();
-          const lang = String(jsonData.lang || "en").trim().toLowerCase();
-          const includeImages = Boolean(jsonData.include_images);
+          const input = JSON.parse(data);
+          const query = String(input.query || "").trim();
+          const lang = String(input.lang || "en").trim().toLowerCase();
+          const includeImages = Boolean(input.include_images);
 
-          if (!topic) {
-            return JSON.stringify({ error: "No topic provided to search." });
+          if (!query) {
+            return JSON.stringify({ error: "No topic provided." });
           }
 
-          const summary = await fetchWikiSummary(topic, lang);
+          const summary = await fetchSummary(query, lang);
 
-          const title = String(summary?.title || topic).trim();
-          const extract = String(summary?.extract || "").trim();
-          const description = String(summary?.description || "").trim();
-          const thumb =
-            summary?.thumbnail?.source ||
-            summary?.originalimage?.source ||
-            "";
+          const title = String(summary?.title || query).trim();
+          let result = String(summary?.extract || summary?.description || "").trim();
 
-          let resultText = extract || description || `No summary available for ${title}.`;
+          if (result.length > 700) {
+            result = result.slice(0, 700) + "...";
+          }
 
           const response = {
             title,
-            result: resultText
+            result: result || `No summary available for ${title}.`
           };
 
           if (includeImages) {
-            if (!thumb) {
-              response.result += `\n\n[Image status: no thumbnail available from Wikipedia summary]`;
-            } else {
+            const imageUrl =
+              summary?.thumbnail?.source ||
+              summary?.originalimage?.source ||
+              "";
+
+            if (imageUrl) {
               try {
-                const base64 = await imageUrlToBase64(thumb);
+                const base64 = await imageUrlToBase64(imageUrl);
                 response.image = { base64 };
-                response.result += `\n\n[Image status: included]`;
-              } catch (imageError) {
-                response.result += `\n\n[Image status: failed - ${imageError.message}]`;
+              } catch (e) {
+                response.result += ` [Image failed: ${e.message}]`;
               }
+            } else {
+              response.result += ` [No image available]`;
             }
           }
 
           return JSON.stringify(response);
         } catch (e) {
-          console.error(e);
-          return JSON.stringify({
-            error: `Failed to query Wikipedia: ${e.message}`
-          });
+          return JSON.stringify({ error: `Failed: ${e.message}` });
         }
       };
     </script>
