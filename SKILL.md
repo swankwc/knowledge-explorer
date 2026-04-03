@@ -1,19 +1,18 @@
 ---
 name: knowledge-explorer
-description: Query summary information from Wikipedia for a given topic.
+description: Get a short Wikipedia summary for a topic, optionally with one image.
 ---
 
 # Knowledge Explorer
 
 ## Instructions
 
-Call the `run_js` tool with the following exact parameters:
+Call the `run_js` tool with these exact parameters:
 - script name: index.html
-- data: A JSON string with the following fields:
-  - query: String. The topic to search for.
-  - lang: String. The two-letter language code.
+- data: A JSON string with:
+  - query: String
+  - lang: String
+  - include_images: Boolean
 
-## Behavior
-- Extract the main topic from the user's request.
-- Use the user's language when possible.
-- Keep your final response grounded in the tool result.
+Use this skill when the user asks about a topic, person, place, event, or concept.
+Keep the final answer short and grounded in the tool result.
